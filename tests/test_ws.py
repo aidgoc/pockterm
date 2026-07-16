@@ -56,7 +56,9 @@ async def test_spawn_input_output_roundtrip():
             await ws.send(json.dumps(
                 {"type": "input", "session": "t", "data": "echo hi_there\n"}))
             got = ""
-            async with asyncio.timeout(4):
+            # Generous bound: a slow-starting shell (PowerShell on a cold CI
+            # runner) can take several seconds to emit the first output.
+            async with asyncio.timeout(20):
                 while "hi_there" not in got:
                     msg = json.loads(await ws.recv())
                     if msg.get("type") == "output":
