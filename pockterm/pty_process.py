@@ -86,8 +86,9 @@ class _WinPtyProcess:
         return cls(proc)
 
     def read(self, size: int = 65536) -> bytes:
-        if not self._proc.isalive():
-            return b""
+        # Read even after the child exits — pywinpty keeps buffered output
+        # available until the pipe drains, then raises EOFError. Gating on
+        # isalive() here would drop the final output of fast commands.
         try:
             return self._proc.read(size).encode("utf-8", errors="replace")
         except EOFError:
