@@ -16,6 +16,7 @@ class PockApp extends StatefulWidget {
 class _PockAppState extends State<PockApp> {
   ServerConfig? _config;
   bool _loaded = false;
+  bool _expired = false;
 
   @override
   void initState() {
@@ -37,13 +38,23 @@ class _PockAppState extends State<PockApp> {
   Future<void> _save(ServerConfig cfg) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('server', jsonEncode(cfg.toJson()));
-    setState(() => _config = cfg);
+    setState(() {
+      _config = cfg;
+      _expired = false;
+    });
   }
 
   Future<void> _forget() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('server');
     setState(() => _config = null);
+  }
+
+  void _repair() {
+    setState(() {
+      _config = null;
+      _expired = true;
+    });
   }
 
   @override
@@ -54,8 +65,12 @@ class _PockAppState extends State<PockApp> {
       home: !_loaded
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : _config == null
-              ? PairScreen(onPaired: _save)
-              : TerminalScreen(config: _config!, onForget: _forget),
+              ? PairScreen(onPaired: _save, expired: _expired)
+              : TerminalScreen(
+                  config: _config!,
+                  onForget: _forget,
+                  onExpired: _repair,
+                ),
     );
   }
 }
