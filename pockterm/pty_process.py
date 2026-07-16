@@ -24,8 +24,6 @@ class PtyProcess:
 
     @classmethod
     def spawn(cls, argv, cwd=None, env=None):
-        if IS_WINDOWS:
-            raise NotImplementedError("Windows branch added in Task 12")
         pid, fd = pty.fork()
         if pid == 0:  # child
             try:
@@ -41,7 +39,7 @@ class PtyProcess:
     def read(self, size: int = 65536) -> bytes:
         try:
             return os.read(self.fd, size)
-        except BlockingIOError:
+        except (BlockingIOError, OSError):
             return b""
 
     def write(self, data: bytes) -> None:
