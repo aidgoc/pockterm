@@ -74,7 +74,15 @@ async def test_attach_replays():
             await _recv_until(ws, "spawned")
             await ws.send(json.dumps(
                 {"type": "input", "session": "r", "data": "echo MARKER\n"}))
-            await asyncio.sleep(0.6)
+            # Wait until the shell has actually emitted MARKER before
+            # disconnecting, so the replay buffer is guaranteed to hold it.
+            # (A fixed sleep races slow-starting shells like PowerShell.)
+            seen = ""
+            async with asyncio.timeout(10):
+                while "MARKER" not in seen:
+                    m = json.loads(await ws.recv())
+                    if m.get("type") == "output":
+                        seen += m["data"]
         async with websockets.connect("ws://127.0.0.1:8799/ws") as ws2:
             await ws2.send(json.dumps({"type": "auth", "token": token}))
             await _recv_until(ws2, "auth_ok")
