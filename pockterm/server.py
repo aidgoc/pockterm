@@ -3,7 +3,6 @@ import json
 import logging
 import re
 import time
-from collections import defaultdict, deque
 
 log = logging.getLogger("pockterm.server")
 
@@ -13,6 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pockterm.auth import Auth
 from pockterm.session import SessionPool
 from pockterm.shells import default_shell, home_dir
+from pockterm.rate_limit import RateLimiter
 
 _NAME_RE = re.compile(r"[^a-zA-Z0-9_.-]")
 
@@ -27,7 +27,7 @@ def build_app(auth: Auth, pool: SessionPool | None = None,
     app.state.auth = auth
     app.state.pool = pool or SessionPool()
     app.state.pair_config = pair_config or {}
-    app.state.pair_hits: dict[str, deque] = defaultdict(deque)
+    app.state.limiter = RateLimiter()
 
     @app.get("/health")
     async def health():
@@ -49,19 +49,11 @@ def build_app(auth: Auth, pool: SessionPool | None = None,
         await websocket.send_json({"type": "auth_ok"})
         await _serve_terminal(websocket, app.state.pool)
 
-    def _rate_limited(ip: str, limit: int = 10, window: float = 60.0) -> bool:
-        now = time.time()
-        hits = app.state.pair_hits[ip]
-        while hits and hits[0] < now - window:
-            hits.popleft()
-        hits.append(now)
-        return len(hits) > limit
-
     @app.post("/api/pair")
     async def pair(request: Request):
         ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
               or (request.client.host if request.client else "?"))
-        if _rate_limited(ip):
+        if app.state.limiter.check(ip, time.time()):
             return JSONResponse({"error": "rate limited"}, status_code=429)
         try:
             body = await request.json()
