@@ -6,8 +6,12 @@ import 'package:app/services/terminal_client.dart';
 class TerminalScreen extends StatefulWidget {
   final ServerConfig config;
   final VoidCallback onForget;
+  final VoidCallback onExpired;
   const TerminalScreen(
-      {super.key, required this.config, required this.onForget});
+      {super.key,
+      required this.config,
+      required this.onForget,
+      required this.onExpired});
   @override
   State<TerminalScreen> createState() => _TerminalScreenState();
 }
@@ -15,9 +19,12 @@ class TerminalScreen extends StatefulWidget {
 class _TerminalScreenState extends State<TerminalScreen> {
   late final Terminal _terminal;
   late final TerminalClient _client;
+  static const _backoff = [1, 2, 4]; // reconnect delays, seconds
   String _active = 'main';
   List<String> _sessions = [];
   String _status = 'connecting…';
+  bool _disposed = false;
+  bool _reconnecting = false;
 
   @override
   void initState() {
@@ -38,6 +45,17 @@ class _TerminalScreenState extends State<TerminalScreen> {
       }
       ..onKilled = (s) {
         if (s == _active) _terminal.write('\r\n[session ended]\r\n');
+      }
+      ..onClosed = (code) {
+        if (_disposed) return;
+        switch (closeAction(code)) {
+          case CloseAction.repair:
+            widget.onExpired();
+            break;
+          case CloseAction.reconnect:
+            _reconnectWithBackoff();
+            break;
+        }
       };
     _connect();
   }
@@ -47,6 +65,28 @@ class _TerminalScreenState extends State<TerminalScreen> {
     try {
       await _client.connect();
     } catch (e) {
+      setState(() => _status = 'offline — tap menu to retry');
+    }
+  }
+
+  Future<void> _reconnectWithBackoff() async {
+    if (_reconnecting) return;
+    _reconnecting = true;
+    for (final secs in _backoff) {
+      if (_disposed) break;
+      setState(() => _status = 'reconnecting…');
+      await Future.delayed(Duration(seconds: secs));
+      if (_disposed) break;
+      try {
+        await _client.connect();
+        _reconnecting = false;
+        return; // _onReady resets the status on auth_ok
+      } catch (_) {
+        // fall through to the next backoff interval
+      }
+    }
+    _reconnecting = false;
+    if (!_disposed) {
       setState(() => _status = 'offline — tap menu to retry');
     }
   }
@@ -142,6 +182,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
 
   @override
   void dispose() {
+    _disposed = true;
     _client.dispose();
     super.dispose();
   }
