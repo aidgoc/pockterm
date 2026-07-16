@@ -47,7 +47,7 @@ def main() -> None:
     print(f"\n  (or open https://{rt.host}:{rt.port}/pair)\n")
     uvicorn.run(rt.app, host="0.0.0.0", port=rt.port,
                 ssl_certfile=rt.cert_path, ssl_keyfile=rt.key_path,
-                log_level="warning")
+                ws="websockets-sansio", log_level="warning")
 
 
 if __name__ == "__main__":
