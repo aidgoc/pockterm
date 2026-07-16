@@ -12,7 +12,8 @@ from pockterm.auth import Auth
 async def running_server():
     auth = Auth()
     app = build_app(auth)
-    config = uvicorn.Config(app, host="127.0.0.1", port=8799, log_level="warning")
+    config = uvicorn.Config(app, host="127.0.0.1", port=8799,
+                            ws="websockets-sansio", log_level="warning")
     server = uvicorn.Server(config)
     task = asyncio.create_task(server.serve())
     for _ in range(100):
