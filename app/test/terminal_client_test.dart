@@ -26,4 +26,32 @@ void main() {
     expect(c.encodeInput('a', 'x'),
         '{"type":"input","session":"a","data":"x"}');
   });
+
+  test('handleClose forwards the close code to onClosed', () {
+    final c = TerminalClient.forTest();
+    int? got = -1;
+    c.onClosed = (code) => got = code;
+    c.handleClose(4001);
+    expect(got, 4001);
+    c.handleClose(1006);
+    expect(got, 1006);
+  });
+
+  test('handleClose is suppressed after dispose', () {
+    final c = TerminalClient.forTest();
+    int? got = -1;
+    c.onClosed = (code) => got = code;
+    c.dispose();
+    c.handleClose(4001);
+    expect(got, -1);
+  });
+
+  test('closeAction classifies auth expiry vs reconnect', () {
+    expect(isAuthExpiry(4001), true);
+    expect(isAuthExpiry(1006), false);
+    expect(isAuthExpiry(null), false);
+    expect(closeAction(4001), CloseAction.repair);
+    expect(closeAction(1006), CloseAction.reconnect);
+    expect(closeAction(null), CloseAction.reconnect);
+  });
 }

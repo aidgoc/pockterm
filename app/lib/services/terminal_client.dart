@@ -8,6 +8,15 @@ import 'package:app/services/pinned_http.dart';
 typedef OutputCb = void Function(String session, String data);
 typedef SessionsCb = void Function(List<String> sessions);
 
+/// A 4001 close means the session token is invalid/expired (the server rotates
+/// the pairing token on every restart) — the app must re-pair by rescanning.
+bool isAuthExpiry(int? code) => code == 4001;
+
+enum CloseAction { repair, reconnect }
+
+CloseAction closeAction(int? code) =>
+    isAuthExpiry(code) ? CloseAction.repair : CloseAction.reconnect;
+
 class TerminalClient {
   final ServerConfig? config;
   WebSocket? _socket;
@@ -15,6 +24,8 @@ class TerminalClient {
   SessionsCb? onSessions;
   void Function()? onAuthOk;
   void Function(String session)? onKilled;
+  void Function(int? code)? onClosed;
+  bool _disposed = false;
 
   List<String> sessions = [];
 
@@ -27,7 +38,11 @@ class TerminalClient {
     _socket = await WebSocket.connect(cfg.wsUrl, customClient: httpClient);
     _socket!.listen(
       (event) => handleMessage(event as String),
-      onDone: () => _socket = null,
+      onDone: () {
+        final code = _socket?.closeCode;
+        _socket = null;
+        handleClose(code);
+      },
     );
     _send({'type': 'auth', 'token': cfg.sessionToken});
   }
@@ -63,6 +78,11 @@ class TerminalClient {
     }
   }
 
+  void handleClose(int? code) {
+    if (_disposed) return;
+    onClosed?.call(code);
+  }
+
   String encodeInput(String session, String data) =>
       jsonEncode({'type': 'input', 'session': session, 'data': data});
 
@@ -77,5 +97,8 @@ class TerminalClient {
       _send({'type': 'resize', 'session': session, 'cols': cols, 'rows': rows});
   void kill(String name) => _send({'type': 'kill', 'session': name});
 
-  void dispose() => _socket?.close();
+  void dispose() {
+    _disposed = true;
+    _socket?.close();
+  }
 }
