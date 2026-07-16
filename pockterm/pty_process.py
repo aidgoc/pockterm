@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 
 IS_WINDOWS = sys.platform == "win32"
@@ -82,7 +83,7 @@ class _WinPtyProcess:
 
     @classmethod
     def spawn(cls, argv, cwd=None, env=None):
-        cmdline = " ".join(argv)
+        cmdline = subprocess.list2cmdline(argv)
         proc = winpty.PtyProcess.spawn(cmdline, cwd=cwd, env=env)
         return cls(proc)
 
