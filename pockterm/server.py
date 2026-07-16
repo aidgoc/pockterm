@@ -1,6 +1,9 @@
 import asyncio
 import json
+import logging
 import re
+
+log = logging.getLogger("pockterm.server")
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
@@ -59,6 +62,8 @@ async def _serve_terminal(websocket: WebSocket, pool: SessionPool):
                     "sessions": pool.list_names()})
                 pool.kill(name)
                 return
+            # proc.read is non-blocking (returns b"" immediately when no data),
+            # so a cancelled pump never leaves a thread stuck in the executor.
             data = await loop.run_in_executor(None, proc.read, 65536)
             if data:
                 session.append_replay(data)
@@ -130,11 +135,13 @@ async def _serve_terminal(websocket: WebSocket, pool: SessionPool):
     except WebSocketDisconnect:
         pass
     except Exception:
-        pass
+        log.exception("ws terminal loop error")
     finally:
         ping_task.cancel()
         for task in reader_tasks.values():
             task.cancel()
+        await asyncio.gather(*reader_tasks.values(), ping_task,
+                             return_exceptions=True)
         # NOTE: PTY sessions are NOT killed on disconnect — only explicit "kill"
         # frames terminate sessions. Reconnecting clients can attach and replay.
 
