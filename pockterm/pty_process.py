@@ -9,6 +9,8 @@ if not IS_WINDOWS:
     import signal
     import struct
     import termios
+else:
+    import winpty  # pywinpty
 
 
 class PtyProcess:
@@ -72,3 +74,42 @@ class PtyProcess:
         except OSError:
             pass
         self._dead = True
+
+
+class _WinPtyProcess:
+    def __init__(self, proc):
+        self._proc = proc
+
+    @classmethod
+    def spawn(cls, argv, cwd=None, env=None):
+        cmdline = " ".join(argv)
+        proc = winpty.PtyProcess.spawn(cmdline, cwd=cwd, env=env)
+        return cls(proc)
+
+    def read(self, size: int = 65536) -> bytes:
+        if not self._proc.isalive():
+            return b""
+        try:
+            return self._proc.read(size).encode("utf-8", errors="replace")
+        except EOFError:
+            return b""
+
+    def write(self, data: bytes) -> None:
+        self._proc.write(data.decode("utf-8", errors="replace"))
+
+    def resize(self, cols: int, rows: int) -> None:
+        self._proc.setwinsize(rows, cols)
+
+    @property
+    def alive(self) -> bool:
+        return self._proc.isalive()
+
+    def terminate(self) -> None:
+        try:
+            self._proc.terminate(force=True)
+        except Exception:
+            pass
+
+
+if IS_WINDOWS:
+    PtyProcess = _WinPtyProcess  # noqa: F811
