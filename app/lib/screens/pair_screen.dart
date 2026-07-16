@@ -5,7 +5,9 @@ import 'package:app/services/pairing.dart';
 
 class PairScreen extends StatefulWidget {
   final void Function(ServerConfig) onPaired;
-  const PairScreen({super.key, required this.onPaired});
+  final bool expired;
+  const PairScreen(
+      {super.key, required this.onPaired, this.expired = false});
   @override
   State<PairScreen> createState() => _PairScreenState();
 }
@@ -38,6 +40,16 @@ class _PairScreenState extends State<PairScreen> {
       appBar: AppBar(title: const Text('Pair with your computer')),
       body: Column(
         children: [
+          if (widget.expired)
+            Container(
+              width: double.infinity,
+              color: Colors.orange.shade900,
+              padding: const EdgeInsets.all(12),
+              child: const Text(
+                'Session expired — scan to reconnect',
+                textAlign: TextAlign.center,
+              ),
+            ),
           Expanded(
             child: MobileScanner(
               onDetect: (capture) {
