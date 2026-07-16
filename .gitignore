@@ -6,3 +6,8 @@ __pycache__/
 *.key
 app/build/
 .dart_tool/
+
+# Android release signing (never commit)
+**/key.properties
+*.jks
+*.keystore
