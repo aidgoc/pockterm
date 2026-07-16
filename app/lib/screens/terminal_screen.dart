@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:xterm/xterm.dart';
 import 'package:app/models/server_config.dart';
 import 'package:app/services/terminal_client.dart';
+import 'package:app/services/keys.dart';
+import 'package:app/theme/app_theme.dart';
+import 'package:app/widgets/key_toolbar.dart';
 
 class TerminalScreen extends StatefulWidget {
   final ServerConfig config;
@@ -17,23 +21,24 @@ class TerminalScreen extends StatefulWidget {
 }
 
 class _TerminalScreenState extends State<TerminalScreen> {
+  static const _backoff = [1, 2, 4];
   late final Terminal _terminal;
   late final TerminalClient _client;
-  static const _backoff = [1, 2, 4]; // reconnect delays, seconds
   String _active = 'main';
   List<String> _sessions = [];
   String _status = 'connecting…';
+  bool _connected = false;
   bool _disposed = false;
   bool _reconnecting = false;
+  bool _ctrl = false;
+  bool _alt = false;
+  bool _shift = false;
 
   @override
   void initState() {
     super.initState();
     _terminal = Terminal(maxLines: 5000);
-    // xterm 4.x: onOutput fires when the terminal wants to send data to the
-    // underlying program (user keystrokes via TerminalView).
-    _terminal.onOutput = (data) => _client.input(_active, data);
-    // onResize fires with (cols, rows, pixelWidth, pixelHeight).
+    _terminal.onOutput = (data) => _send(data);
     _terminal.onResize = (w, h, pw, ph) => _client.resize(_active, w, h);
     _client = TerminalClient(widget.config)
       ..onAuthOk = _onReady
@@ -48,6 +53,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
       }
       ..onClosed = (code) {
         if (_disposed) return;
+        setState(() => _connected = false);
         switch (closeAction(code)) {
           case CloseAction.repair:
             widget.onExpired();
@@ -60,12 +66,45 @@ class _TerminalScreenState extends State<TerminalScreen> {
     _connect();
   }
 
+  /// Single send path: apply armed modifiers, transmit, then clear them.
+  void _send(String data) {
+    final out = applyModifiers(data, ctrl: _ctrl, alt: _alt, shift: _shift);
+    _client.input(_active, out);
+    if (_ctrl || _alt || _shift) {
+      setState(() {
+        _ctrl = false;
+        _alt = false;
+        _shift = false;
+      });
+    }
+  }
+
+  void _onKey(String name) => _send(keySequence(name));
+
+  void _onCtrl(String letter) =>
+      _client.input(_active, applyModifiers(letter, ctrl: true));
+
+  void _toggleMod(String mod) => setState(() {
+        if (mod == 'ctrl') _ctrl = !_ctrl;
+        if (mod == 'alt') _alt = !_alt;
+        if (mod == 'shift') _shift = !_shift;
+      });
+
+  Future<void> _paste() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text != null && text.isNotEmpty) _client.input(_active, text);
+  }
+
   Future<void> _connect() async {
     setState(() => _status = 'connecting…');
     try {
       await _client.connect();
     } catch (e) {
-      setState(() => _status = 'offline — tap menu to retry');
+      setState(() {
+        _status = 'offline';
+        _connected = false;
+      });
     }
   }
 
@@ -80,26 +119,24 @@ class _TerminalScreenState extends State<TerminalScreen> {
       try {
         await _client.connect();
         _reconnecting = false;
-        return; // _onReady resets the status on auth_ok
-      } catch (_) {
-        // fall through to the next backoff interval
-      }
+        return;
+      } catch (_) {}
     }
     _reconnecting = false;
-    if (!_disposed) {
-      setState(() => _status = 'offline — tap menu to retry');
-    }
+    if (!_disposed) setState(() => _status = 'offline');
   }
 
   void _onReady() {
-    setState(() => _status = 'connected');
+    setState(() {
+      _status = 'connected';
+      _connected = true;
+    });
     _client.spawn(_active);
     _client.listSessions();
   }
 
   void _switch(String name) {
     setState(() => _active = name);
-    // Clear the scrollback so the new session output starts fresh.
     _terminal.buffer.clear();
     _client.attach(name);
   }
@@ -110,8 +147,13 @@ class _TerminalScreenState extends State<TerminalScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('New session'),
-        content: TextField(controller: controller, autofocus: true),
+        backgroundColor: AppColors.surface,
+        title: const Text('New session', style: TextStyle(color: AppColors.text)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: AppColors.text),
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -128,53 +170,146 @@ class _TerminalScreenState extends State<TerminalScreen> {
     }
   }
 
-  void _sendKey(String data) => _client.input(_active, data);
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${widget.config.name} · $_status'),
-        actions: [
-          IconButton(icon: const Icon(Icons.add), onPressed: _newSession),
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _topBar(),
+            if (_sessions.isNotEmpty) _sessionTabs(),
+            Expanded(
+              child: TerminalView(
+                _terminal,
+                theme: terminalTheme,
+                textStyle: const TerminalStyle(fontSize: 13),
+                padding: const EdgeInsets.all(4),
+                autofocus: true,
+              ),
+            ),
+            KeyToolbar(
+              ctrl: _ctrl,
+              alt: _alt,
+              shift: _shift,
+              onKey: _onKey,
+              onCtrl: _onCtrl,
+              onToggleMod: _toggleMod,
+              onDismiss: () => FocusScope.of(context).unfocus(),
+              onPaste: _paste,
+            ),
+            _statusBar(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _topBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _connected ? AppColors.green : AppColors.red,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              widget.config.name,
+              style: const TextStyle(
+                  color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.add, color: AppColors.dim, size: 20),
+            onPressed: _newSession,
+          ),
           PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: AppColors.dim, size: 20),
+            color: AppColors.surface,
             onSelected: (v) {
-              if (v == 'forget') widget.onForget();
               if (v == 'reconnect') _connect();
+              if (v == 'forget') widget.onForget();
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'reconnect', child: Text('Reconnect')),
-              PopupMenuItem(value: 'forget', child: Text('Forget server')),
+              PopupMenuItem(
+                  value: 'reconnect',
+                  child: Text('Reconnect', style: TextStyle(color: AppColors.text))),
+              PopupMenuItem(
+                  value: 'forget',
+                  child: Text('Forget server',
+                      style: TextStyle(color: AppColors.text))),
             ],
           ),
         ],
-        bottom: _sessions.length > 1
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(40),
-                child: SizedBox(
-                  height: 40,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: _sessions
-                        .map((s) => Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 4),
-                              child: ChoiceChip(
-                                label: Text(s),
-                                selected: s == _active,
-                                onSelected: (_) => _switch(s),
-                              ),
-                            ))
-                        .toList(),
+      ),
+    );
+  }
+
+  Widget _sessionTabs() {
+    return Container(
+      height: 40,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        children: _sessions.map((s) {
+          final active = s == _active;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            child: GestureDetector(
+              onTap: () => _switch(s),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: active ? AppColors.accent : AppColors.bg,
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  s,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: active ? Colors.white : AppColors.dim,
                   ),
                 ),
-              )
-            : null,
+              ),
+            ),
+          );
+        }).toList(),
       ),
-      body: Column(
+    );
+  }
+
+  Widget _statusBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(child: TerminalView(_terminal)),
-          _KeyBar(onKey: _sendKey),
+          Text(_status,
+              style: const TextStyle(color: AppColors.dim, fontSize: 10)),
+          Text('${_sessions.length} sessions',
+              style: const TextStyle(color: AppColors.dim, fontSize: 10)),
         ],
       ),
     );
@@ -185,44 +320,5 @@ class _TerminalScreenState extends State<TerminalScreen> {
     _disposed = true;
     _client.dispose();
     super.dispose();
-  }
-}
-
-class _KeyBar extends StatelessWidget {
-  final void Function(String) onKey;
-  const _KeyBar({required this.onKey});
-
-  @override
-  Widget build(BuildContext context) {
-    const keys = <String, String>{
-      'Esc': '\x1b',
-      'Tab': '\t',
-      '^C': '\x03',
-      '^D': '\x04',
-      '←': '\x1b[D',
-      '↑': '\x1b[A',
-      '↓': '\x1b[B',
-      '→': '\x1b[C',
-      '|': '|',
-      '~': '~',
-      '/': '/',
-    };
-    return SizedBox(
-      height: 44,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        children: keys.entries
-            .map((e) => Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
-                  child: OutlinedButton(
-                    onPressed: () => onKey(e.value),
-                    child: Text(e.key),
-                  ),
-                ))
-            .toList(),
-      ),
-    );
   }
 }
