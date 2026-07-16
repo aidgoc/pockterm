@@ -3,6 +3,25 @@
 Your computer's terminal, on your phone. LAN-only, paired by QR, encrypted with a
 pinned self-signed certificate.
 
+## Features
+
+- **Real shell, on your phone** — a full PTY (your `$SHELL` on macOS/Linux,
+  PowerShell on Windows), streamed live over WebSocket.
+- **Multi-session tabs** — spawn, switch, and kill named sessions from the app.
+- **Reconnect-safe** — sessions live in the server with a scrollback buffer, so
+  backgrounding the app or a Wi-Fi blip resumes right where you left off (replayed
+  on attach; auto-reconnect with backoff).
+- **QR pairing, no accounts** — scan once; the app stores a session token and
+  reconnects automatically. Restart the server to revoke every paired phone.
+- **Auto re-pair on expiry** — when the token rotates, the app drops to the scan
+  screen with a "session expired" banner instead of stranding you.
+- **Encrypted on any LAN** — a self-signed TLS cert whose fingerprint is carried in
+  the QR and pinned by the app, so traffic is protected even on hostile Wi-Fi.
+- **Mobile-first terminal** — `xterm` rendering, an on-screen key bar
+  (Esc/Tab/Ctrl-C/arrows/pipe), and fit-to-screen resizing.
+- **Cross-platform, zero-build install** — one-line git-free installer pulls a
+  pinned release tarball; runs on macOS, Linux, and Windows.
+
 ## Install (computer)
 
 **macOS / Linux**
