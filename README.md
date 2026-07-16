@@ -15,7 +15,23 @@ curl -fsSL https://raw.githubusercontent.com/aidgoc/pockterm/main/install.sh | b
 irm https://raw.githubusercontent.com/aidgoc/pockterm/main/install.ps1 | iex
 ```
 
-It starts the server and prints a QR code.
+It downloads the **latest release**, sets up a venv, and starts the server (printing
+a QR code). No `git` required — only `curl`/`tar` (present by default on macOS and
+Windows 10+).
+
+**Pin a specific version** with `POCKTERM_REF`:
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/aidgoc/pockterm/main/install.sh | POCKTERM_REF=v0.1.0 bash
+```
+```powershell
+# Windows
+$env:POCKTERM_REF="v0.1.0"; irm https://raw.githubusercontent.com/aidgoc/pockterm/main/install.ps1 | iex
+```
+
+Set `POCKTERM_INSTALL_ONLY=1` to install without launching. Install location defaults
+to `~/.pockterm-app` (`POCKTERM_DIR` to change it).
 
 > Windows needs **Python 3.11–3.13** — the `pywinpty` terminal backend has no
 > Python 3.14 wheel yet. macOS/Linux run fine on 3.14.
