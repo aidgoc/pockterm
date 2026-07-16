@@ -22,11 +22,13 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      # pywinpty ships no Python 3.14 wheel yet (PyO3 rejects 3.14), so the
+      # Windows backend targets 3.13 until a 3.14 wheel is published.
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.13"
       - run: pip install -r requirements.txt
-      - run: pip install pywinpty==2.0.14
+      - run: pip install "pywinpty>=2.0.14"
       - run: pytest -q
 
   app:

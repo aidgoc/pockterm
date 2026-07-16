@@ -17,6 +17,9 @@ irm https://raw.githubusercontent.com/aidgoc/pockterm/main/install.ps1 | iex
 
 It starts the server and prints a QR code.
 
+> Windows needs **Python 3.11–3.13** — the `pywinpty` terminal backend has no
+> Python 3.14 wheel yet. macOS/Linux run fine on 3.14.
+
 ## App (phone)
 
 Install the pockterm app (Android/iOS), open it, scan the QR. Your shell appears.
