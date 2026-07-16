@@ -2,10 +2,13 @@ import asyncio
 import json
 import logging
 import re
+import time
+from collections import defaultdict, deque
 
 log = logging.getLogger("pockterm.server")
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from pockterm.auth import Auth
 from pockterm.session import SessionPool
@@ -18,10 +21,13 @@ def _sanitize_name(name: str) -> str:
     return _NAME_RE.sub("", (name or "").strip())[:64]
 
 
-def build_app(auth: Auth, pool: SessionPool | None = None) -> FastAPI:
+def build_app(auth: Auth, pool: SessionPool | None = None,
+              pair_config: dict | None = None) -> FastAPI:
     app = FastAPI()
     app.state.auth = auth
     app.state.pool = pool or SessionPool()
+    app.state.pair_config = pair_config or {}
+    app.state.pair_hits: dict[str, deque] = defaultdict(deque)
 
     @app.get("/health")
     async def health():
@@ -42,6 +48,43 @@ def build_app(auth: Auth, pool: SessionPool | None = None) -> FastAPI:
             return
         await websocket.send_json({"type": "auth_ok"})
         await _serve_terminal(websocket, app.state.pool)
+
+    def _rate_limited(ip: str, limit: int = 10, window: float = 60.0) -> bool:
+        now = time.time()
+        hits = app.state.pair_hits[ip]
+        while hits and hits[0] < now - window:
+            hits.popleft()
+        hits.append(now)
+        return len(hits) > limit
+
+    @app.post("/api/pair")
+    async def pair(request: Request):
+        ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+              or (request.client.host if request.client else "?"))
+        if _rate_limited(ip):
+            return JSONResponse({"error": "rate limited"}, status_code=429)
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"error": "bad json"}, status_code=400)
+        if not auth.verify_pairing(body.get("token", "")):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        return {"token": auth.make_session_token(),
+                "name": app.state.pair_config.get("name", "pockterm")}
+
+    @app.get("/pair", response_class=HTMLResponse)
+    async def pair_page():
+        cfg = app.state.pair_config
+        return (
+            "<!doctype html><html><head><meta charset=utf-8>"
+            "<title>pockterm pairing</title>"
+            "<meta name=viewport content='width=device-width,initial-scale=1'>"
+            "<style>body{font-family:system-ui;background:#111;color:#eee;"
+            "text-align:center;padding:2rem}code{color:#6cf}</style></head>"
+            "<body><h1>pockterm</h1><p>Scan the QR shown in your terminal with "
+            f"the pockterm app.</p><p>Server: <code>{cfg.get('host')}:"
+            f"{cfg.get('port')}</code></p></body></html>"
+        )
 
     return app
 
