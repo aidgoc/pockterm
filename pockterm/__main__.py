@@ -6,9 +6,11 @@ import uvicorn
 
 from pockterm.auth import Auth
 from pockterm.pairing import ensure_cert, lan_ip, print_qr, qr_payload
+from pockterm.secretstore import load_or_create_secret
 from pockterm.server import build_app
 
 DEFAULT_PORT = 8422
+SESSION_TTL = 3650 * 24 * 3600  # ~10 years — pairing persists until "Forget"
 
 
 @dataclass
@@ -30,7 +32,8 @@ def build_runtime(port: int = DEFAULT_PORT, state_dir: str | None = None) -> Run
     key_path = os.path.join(state_dir, "key.pem")
     host = lan_ip()
     fp = ensure_cert(cert_path, key_path, host)
-    auth = Auth()
+    secret = load_or_create_secret(os.path.join(state_dir, "secret"))
+    auth = Auth(secret=secret, ttl=SESSION_TTL)
     name = socket.gethostname()
     payload = qr_payload(host, port, auth.pairing_token, fp, name)
     app = build_app(auth, pair_config={"host": host, "port": port,
