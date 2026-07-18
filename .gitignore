@@ -11,3 +11,6 @@ app/build/
 **/key.properties
 *.jks
 *.keystore
+
+# internal design docs — never publish
+docs/superpowers/

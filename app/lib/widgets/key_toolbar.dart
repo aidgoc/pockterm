@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:app/theme/app_theme.dart';
 
-/// Horizontal, grouped, scrollable key toolbar matching the reference terminal UI.
+/// Horizontal, grouped, scrollable on-screen key toolbar for the terminal.
 /// - onKey(name): a named key (arrows/esc/tab/home/…) or a literal (symbol/digit);
 ///   the screen resolves the escape sequence and applies armed modifiers.
 /// - onCtrl(letter): a direct ctrl-combo (C-c … C-r), sent verbatim.
