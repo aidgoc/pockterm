@@ -1,4 +1,8 @@
 import os
+import sys
+
+import pytest
+
 from pockterm.secretstore import load_or_create_secret
 from pockterm.auth import Auth
 
@@ -11,6 +15,8 @@ def test_creates_and_is_idempotent(tmp_path):
     assert load_or_create_secret(p) == s1  # same on second call
 
 
+@pytest.mark.skipif(sys.platform == "win32",
+                    reason="POSIX file modes; Windows chmod only toggles read-only")
 def test_mode_is_600(tmp_path):
     p = str(tmp_path / "secret")
     load_or_create_secret(p)
