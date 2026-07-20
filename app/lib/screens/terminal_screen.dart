@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xterm/xterm.dart';
 import 'package:app/models/server_config.dart';
 import 'package:app/services/terminal_client.dart';
@@ -22,8 +23,11 @@ class TerminalScreen extends StatefulWidget {
 
 class _TerminalScreenState extends State<TerminalScreen> {
   static const _backoff = [1, 2, 4];
+  static const _minFont = 8.0;
+  static const _maxFont = 28.0;
   late final Terminal _terminal;
   late final TerminalClient _client;
+  final _termScroll = ScrollController();
   String _active = 'main';
   List<String> _sessions = [];
   String _status = 'connecting…';
@@ -33,11 +37,27 @@ class _TerminalScreenState extends State<TerminalScreen> {
   bool _ctrl = false;
   bool _alt = false;
   bool _shift = false;
+  double _fontSize = 13;
+  bool _scrolledUp = false;
+  // Pinch-to-zoom tracked with raw pointers so the terminal's own drag/tap
+  // gestures (scroll, selection) are never contested in the gesture arena.
+  final Map<int, Offset> _touches = {};
+  double? _pinchStartDist;
+  double? _pinchStartFont;
 
   @override
   void initState() {
     super.initState();
-    _terminal = Terminal(maxLines: 5000);
+    _loadFontSize();
+    _termScroll.addListener(() {
+      // "At bottom" in xterm's Scrollable = offset at maxScrollExtent.
+      final atBottom = !_termScroll.hasClients ||
+          _termScroll.offset >= _termScroll.position.maxScrollExtent - 8;
+      if (_scrolledUp == atBottom) {
+        setState(() => _scrolledUp = !atBottom);
+      }
+    });
+    _terminal = Terminal(maxLines: 10000);
     _terminal.onOutput = (data) => _send(data);
     _terminal.onResize = (w, h, pw, ph) => _client.resize(_active, w, h);
     _client = TerminalClient(widget.config)
@@ -94,6 +114,69 @@ class _TerminalScreenState extends State<TerminalScreen> {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text;
     if (text != null && text.isNotEmpty) _client.input(_active, text);
+  }
+
+  Future<void> _loadFontSize() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getDouble('fontSize');
+    if (saved != null && mounted) {
+      setState(() => _fontSize = saved.clamp(_minFont, _maxFont));
+    }
+  }
+
+  Future<void> _saveFontSize() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('fontSize', _fontSize);
+  }
+
+  void _setFontSize(double size) {
+    final clamped = size.clamp(_minFont, _maxFont);
+    if (clamped != _fontSize) {
+      // autoResize recalculates cols/rows on rebuild -> onResize -> PTY resize,
+      // so the shell reflows to the new glyph grid automatically.
+      setState(() => _fontSize = clamped);
+    }
+  }
+
+  void _bumpFont(double delta) {
+    _setFontSize(_fontSize + delta);
+    _saveFontSize();
+  }
+
+  void _onPointerDown(PointerDownEvent e) {
+    _touches[e.pointer] = e.position;
+    if (_touches.length == 2) {
+      final pts = _touches.values.toList();
+      _pinchStartDist = (pts[0] - pts[1]).distance;
+      _pinchStartFont = _fontSize;
+    }
+  }
+
+  void _onPointerMove(PointerMoveEvent e) {
+    if (!_touches.containsKey(e.pointer)) return;
+    _touches[e.pointer] = e.position;
+    if (_touches.length == 2 && _pinchStartDist != null) {
+      final pts = _touches.values.toList();
+      final dist = (pts[0] - pts[1]).distance;
+      if (_pinchStartDist! > 0) {
+        _setFontSize(_pinchStartFont! * (dist / _pinchStartDist!));
+      }
+    }
+  }
+
+  void _onPointerEnd(int pointer) {
+    _touches.remove(pointer);
+    if (_touches.length < 2 && _pinchStartDist != null) {
+      _pinchStartDist = null;
+      _pinchStartFont = null;
+      _saveFontSize();
+    }
+  }
+
+  void _jumpToBottom() {
+    if (_termScroll.hasClients) {
+      _termScroll.jumpTo(_termScroll.position.maxScrollExtent);
+    }
   }
 
   Future<void> _connect() async {
@@ -180,12 +263,44 @@ class _TerminalScreenState extends State<TerminalScreen> {
             _topBar(),
             if (_sessions.isNotEmpty) _sessionTabs(),
             Expanded(
-              child: TerminalView(
-                _terminal,
-                theme: terminalTheme,
-                textStyle: const TerminalStyle(fontSize: 13),
-                padding: const EdgeInsets.all(4),
-                autofocus: true,
+              child: Stack(
+                children: [
+                  Listener(
+                    behavior: HitTestBehavior.translucent,
+                    onPointerDown: _onPointerDown,
+                    onPointerMove: _onPointerMove,
+                    onPointerUp: (e) => _onPointerEnd(e.pointer),
+                    onPointerCancel: (e) => _onPointerEnd(e.pointer),
+                    child: TerminalView(
+                      _terminal,
+                      scrollController: _termScroll,
+                      theme: terminalTheme,
+                      textStyle: TerminalStyle(fontSize: _fontSize),
+                      padding: const EdgeInsets.all(4),
+                      autofocus: true,
+                    ),
+                  ),
+                  if (_scrolledUp)
+                    Positioned(
+                      right: 12,
+                      bottom: 12,
+                      child: GestureDetector(
+                        onTap: _jumpToBottom,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            border: Border.all(color: AppColors.accent),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Text('⌄ bottom',
+                              style: TextStyle(
+                                  color: AppColors.accent, fontSize: 12)),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
             KeyToolbar(
@@ -230,6 +345,16 @@ class _TerminalScreenState extends State<TerminalScreen> {
                   color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 13),
               overflow: TextOverflow.ellipsis,
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.text_decrease, color: AppColors.dim, size: 20),
+            tooltip: 'Smaller text',
+            onPressed: () => _bumpFont(-1),
+          ),
+          IconButton(
+            icon: const Icon(Icons.text_increase, color: AppColors.dim, size: 20),
+            tooltip: 'Bigger text',
+            onPressed: () => _bumpFont(1),
           ),
           IconButton(
             icon: const Icon(Icons.add, color: AppColors.dim, size: 20),
@@ -318,6 +443,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
   @override
   void dispose() {
     _disposed = true;
+    _termScroll.dispose();
     _client.dispose();
     super.dispose();
   }
