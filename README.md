@@ -1,5 +1,7 @@
 # pockterm
 
+<p align="center"><img src="app/assets/icon/icon-master.png" width="120" alt="pockterm"></p>
+
 Your computer's terminal, on your phone. LAN-only, paired by QR, encrypted with a
 pinned self-signed certificate.
 
