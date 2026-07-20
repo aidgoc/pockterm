@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2230"/>
+      <stop offset="1" stop-color="#0d1117"/>
+    </linearGradient>
+  </defs>
+  <!-- full-bleed background (OS applies the corner mask) -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <!-- phone / pocket body -->
+  <rect x="322" y="236" width="380" height="552" rx="60" fill="#0d1117" stroke="#58a6ff" stroke-width="34"/>
+  <!-- notch -->
+  <rect x="452" y="286" width="120" height="18" rx="9" fill="#58a6ff" opacity="0.7"/>
+  <!-- prompt chevron -->
+  <path d="M 418 470 l 100 78 l -100 78" fill="none" stroke="#58a6ff" stroke-width="46"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- cursor underscore -->
+  <rect x="540" y="602" width="134" height="34" rx="8" fill="#3fb950"/>
+</svg>
