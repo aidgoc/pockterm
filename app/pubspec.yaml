@@ -26,6 +26,13 @@ flutter_launcher_icons:
   adaptive_icon_foreground: "assets/icon/icon-foreground.png"
   remove_alpha_ios: true
 
+flutter_native_splash:
+  color: "#0D1117"
+  image: assets/icon/icon-foreground.png
+  android_12:
+    image: assets/icon/icon-foreground.png
+    color: "#0D1117"
+
 environment:
   sdk: ^3.11.0
 
@@ -54,6 +61,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
