@@ -69,7 +69,15 @@ class _TerminalScreenState extends State<TerminalScreen> {
         setState(() => _sessions = list);
       }
       ..onKilled = (s) {
-        if (s == _active) _terminal.write('\r\n[session ended]\r\n');
+        if (s == _active) {
+          _terminal.write('\r\n[session ended]\r\n');
+          // Move to a surviving session so the user isn't stranded on a
+          // dead shell. client.sessions is already updated at this point.
+          final remaining = _client.sessions;
+          if (remaining.isNotEmpty && !remaining.contains(_active)) {
+            _switch(remaining.first);
+          }
+        }
       }
       ..onClosed = (code) {
         if (_disposed) return;
@@ -177,6 +185,29 @@ class _TerminalScreenState extends State<TerminalScreen> {
     if (_termScroll.hasClients) {
       _termScroll.jumpTo(_termScroll.position.maxScrollExtent);
     }
+  }
+
+  Future<void> _confirmKill(String name) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text('Kill "$name"?',
+            style: const TextStyle(color: AppColors.text)),
+        content: const Text('Ends the shell and anything running in it.',
+            style: TextStyle(color: AppColors.dim)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child:
+                  const Text('Kill', style: TextStyle(color: AppColors.red))),
+        ],
+      ),
+    );
+    if (yes == true) _client.kill(name);
   }
 
   Future<void> _connect() async {
@@ -365,12 +396,17 @@ class _TerminalScreenState extends State<TerminalScreen> {
             color: AppColors.surface,
             onSelected: (v) {
               if (v == 'reconnect') _connect();
+              if (v == 'kill') _confirmKill(_active);
               if (v == 'forget') widget.onForget();
             },
             itemBuilder: (_) => const [
               PopupMenuItem(
                   value: 'reconnect',
                   child: Text('Reconnect', style: TextStyle(color: AppColors.text))),
+              PopupMenuItem(
+                  value: 'kill',
+                  child: Text('Kill session',
+                      style: TextStyle(color: AppColors.red))),
               PopupMenuItem(
                   value: 'forget',
                   child: Text('Forget server',
@@ -398,6 +434,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 3),
             child: GestureDetector(
               onTap: () => _switch(s),
+              onLongPress: () => _confirmKill(s),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 alignment: Alignment.center,
