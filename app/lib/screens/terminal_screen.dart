@@ -21,7 +21,8 @@ class TerminalScreen extends StatefulWidget {
   State<TerminalScreen> createState() => _TerminalScreenState();
 }
 
-class _TerminalScreenState extends State<TerminalScreen> {
+class _TerminalScreenState extends State<TerminalScreen>
+    with WidgetsBindingObserver {
   static const _backoff = [1, 2, 4];
   static const _minFont = 8.0;
   static const _maxFont = 28.0;
@@ -48,6 +49,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadFontSize();
     _termScroll.addListener(() {
       // "At bottom" in xterm's Scrollable = offset at maxScrollExtent.
@@ -245,7 +247,12 @@ class _TerminalScreenState extends State<TerminalScreen> {
       _status = 'connected';
       _connected = true;
     });
+    // spawn is idempotent server-side (resumes the existing session); attach
+    // then replays the scrollback that accumulated while we were away. Clear
+    // first so the replay isn't appended onto stale local content.
     _client.spawn(_active);
+    _terminal.buffer.clear();
+    _client.attach(_active);
     _client.listSessions();
   }
 
@@ -478,8 +485,19 @@ class _TerminalScreenState extends State<TerminalScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back from another app / lock screen: the socket may have been
+    // torn down (and the backoff loop expired) while we were suspended, so
+    // reconnect immediately instead of leaving the user on "offline".
+    if (state == AppLifecycleState.resumed && !_connected && !_disposed) {
+      _connect();
+    }
+  }
+
+  @override
   void dispose() {
     _disposed = true;
+    WidgetsBinding.instance.removeObserver(this);
     _termScroll.dispose();
     _client.dispose();
     super.dispose();
