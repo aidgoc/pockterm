@@ -44,11 +44,11 @@ Windows 10+).
 
 ```bash
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/aidgoc/pockterm/main/install.sh | POCKTERM_REF=v0.1.0 bash
+curl -fsSL https://raw.githubusercontent.com/aidgoc/pockterm/main/install.sh | POCKTERM_REF=v0.1.1 bash
 ```
 ```powershell
 # Windows
-$env:POCKTERM_REF="v0.1.0"; irm https://raw.githubusercontent.com/aidgoc/pockterm/main/install.ps1 | iex
+$env:POCKTERM_REF="v0.1.1"; irm https://raw.githubusercontent.com/aidgoc/pockterm/main/install.ps1 | iex
 ```
 
 Set `POCKTERM_INSTALL_ONLY=1` to install without launching. Install location defaults
