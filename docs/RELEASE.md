@@ -65,3 +65,22 @@ Pockterm is a **remote-shell** client. Both stores will ask about data use: it
 transmits terminal I/O over the local network to a server the user controls; it does
 not collect analytics or personal data. Disclose the LAN/network usage and the
 full-shell capability honestly.
+
+## 8. PyPI publishing (one-time setup) **(you)**
+The repo has a Trusted-Publisher workflow (`.github/workflows/publish.yml`) that
+uploads to PyPI automatically on every GitHub Release — **no API tokens**. One-time
+setup:
+1. Create an account at https://pypi.org.
+2. PyPI → Your projects → "Publishing" → **Add a new pending publisher**:
+   - PyPI project name: `pockterm`
+   - Owner: `aidgoc` · Repository: `pockterm`
+   - Workflow name: `publish.yml` · Environment: `pypi`
+3. GitHub repo → Settings → Environments → create an environment named `pypi`.
+After that, every published release lands on PyPI as `pip install pockterm`.
+
+## 9. Attach the Android APK to each release
+```bash
+cd app && flutter build apk --release --split-per-abi
+gh release upload vX.Y.Z build/app/outputs/flutter-apk/app-arm64-v8a-release.apk#pockterm.apk
+```
+(The README's phone instructions point users at the latest release's APK.)

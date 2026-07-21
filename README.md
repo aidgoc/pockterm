@@ -26,29 +26,40 @@ pinned self-signed certificate.
 
 ## Install (computer)
 
-**macOS / Linux**
+**Recommended — as a package** (any OS with Python 3.11+; installs all
+dependencies automatically, including the Windows PTY backend):
+```bash
+pipx install pockterm     # or: pip install pockterm
+pockterm                  # starts the server and prints the pairing QR
+```
+macOS extras (menu-bar app with one-click QR): `pipx install "pockterm[menubar]"`,
+then `pockterm-menubar`.
+
+**Or the one-liner** (no Python packaging knowledge needed):
+
+macOS / Linux
 ```bash
 curl -fsSL https://raw.githubusercontent.com/aidgoc/pockterm/main/install.sh | bash
 ```
 
-**Windows (PowerShell)**
+Windows (PowerShell)
 ```powershell
 irm https://raw.githubusercontent.com/aidgoc/pockterm/main/install.ps1 | iex
 ```
 
-It downloads the **latest release**, sets up a venv, and starts the server (printing
-a QR code). No `git` required — only `curl`/`tar` (present by default on macOS and
-Windows 10+).
+The one-liner downloads the **latest release**, sets up a venv, and starts the
+server (printing a QR code). No `git` required — only `curl`/`tar` (present by
+default on macOS and Windows 10+).
 
 **Pin a specific version** with `POCKTERM_REF`:
 
 ```bash
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/aidgoc/pockterm/main/install.sh | POCKTERM_REF=v0.1.1 bash
+curl -fsSL https://raw.githubusercontent.com/aidgoc/pockterm/main/install.sh | POCKTERM_REF=v0.1.2 bash
 ```
 ```powershell
 # Windows
-$env:POCKTERM_REF="v0.1.1"; irm https://raw.githubusercontent.com/aidgoc/pockterm/main/install.ps1 | iex
+$env:POCKTERM_REF="v0.1.2"; irm https://raw.githubusercontent.com/aidgoc/pockterm/main/install.ps1 | iex
 ```
 
 Set `POCKTERM_INSTALL_ONLY=1` to install without launching. Install location defaults
@@ -59,8 +70,14 @@ to `~/.pockterm-app` (`POCKTERM_DIR` to change it).
 
 ## App (phone)
 
-Install the pockterm app (Android/iOS), open it, scan the QR. Your shell appears.
-Phone and computer must be on the same Wi-Fi.
+**Android:** download `pockterm.apk` from the
+[latest release](https://github.com/aidgoc/pockterm/releases/latest), allow
+"install unknown apps", install, open, scan the QR. Your shell appears.
+
+**iOS:** build from source (`app/`, Flutter) — not on the App Store yet.
+
+Phone and computer must be able to reach each other: same Wi-Fi, or both on the
+same [Tailscale](https://tailscale.com) tailnet (works from anywhere).
 
 ## ⚠️ Security
 
