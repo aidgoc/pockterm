@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pockterm"
+description = "Your computer's terminal, on your phone. LAN-only, QR-paired, pinned-TLS."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dynamic = ["version"]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.51",
+    "cryptography>=44",
+    "qrcode>=8",
+    "websockets>=14",
+    'pywinpty>=2.0.14; sys_platform == "win32"',
+]
+
+[project.optional-dependencies]
+menubar = [
+    'rumps>=0.4; sys_platform == "darwin"',
+    "pillow>=10",
+]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "httpx>=0.28",
+]
+
+[project.urls]
+Homepage = "https://github.com/aidgoc/pockterm"
+Issues = "https://github.com/aidgoc/pockterm/issues"
+
+[project.scripts]
+pockterm = "pockterm.__main__:main"
+pockterm-menubar = "pockterm.menubar:main"
+
+[tool.setuptools]
+packages = ["pockterm"]
+
+[tool.setuptools.dynamic]
+version = { attr = "pockterm.__version__" }
